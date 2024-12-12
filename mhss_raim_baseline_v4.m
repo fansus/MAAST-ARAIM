@@ -9,7 +9,6 @@ function [vpl, hpl, sig_acc, emt, subsets, pap_subset, p_not_monitored, rho] = m
 %*     Questions and comments should be directed to Juan Blanch at:      *
 %*     blanch@stanford.edu                                               *
 %*************************************************************************
-
 %Created 14 August 2012 by Juan Blanch
 %Modified 17 March 2015 by Juan Blanch (refinement of exclusion list)
 %Modified 24 August 2017 by Juan Blanch (allocation to exclusion, modified
@@ -21,16 +20,25 @@ function [vpl, hpl, sig_acc, emt, subsets, pap_subset, p_not_monitored, rho] = m
 %International Technical Meeting of The Satellite Division of the Institute of Navigation (ION GNSS 2012), Nashville, September 2012.
 
 %G (Nsat X (3+Nconst)) geometry matrix in ENU. G(i,3+j)=1 if satellite i belongs to constellation j and zero otherwise
+%G（Nsat x (3+Nconst)）是ENU坐标系中的几何矩阵。如果卫星i属于星座j，则G(i,3+j)=1，否则为0
 %sig2pr_int (Nsat X 1) nominal variance of the pseudorange error for integrity
+%sig2pr_int（Nsat x 1）是伪距误差的名义方差，用于完整性检查
 %sig2pr_acc (Nsat X 1) nominal variance of the pseudorange error for accuracy
+%sig2pr_acc（Nsat x 1）是伪距误差的名义方差，用于精度计算
 %nom_bias_int (Nsat X 1) nominal bias of the pseudorange error for integrity
+%nom_bias_int（Nsat x 1）是伪距误差的名义偏差，用于完整性检查
 %nom_bias_acc (Nsat X 1) nominal bias of the pseudorange error for accuracy
+%nom_bias_acc（Nsat x 1）是伪距误差的名义偏差，用于精度计算
 %p_sat (Nsat X 1) a priori probability of satellite fault
+%p_sat（Nsat x 1）是卫星故障的先验概率
 %p_const (Nsat X 1) a priori probability of constellation fault
+%p_const（Nsat x 1）是星座故障的先验概率
 %if p_sat or p_const are one scalar, it is assumed that it applies to all satellites or constellations
+%如果p_sat或p_const是一个标量，则假设该标量适用于所有卫星或星座
 %rho_j is the fraction of the integrity budget given to exclusion mode j.
+%rho_j是完整性预算分配给排除模式j的比例
 %For FD, rho_j =1
-
+%对于故障检测（FD），rho_j = 1
 rho = [];
 
 if nargin<9
@@ -42,21 +50,18 @@ global PHMI_VERT PHMI_HOR P_THRES PFA_VERT PFA_HOR P_EMT PL_TOL FC_THRES
 global SIG_ACC_MAX_VERT SIG_ACC_MAX_HOR1 SIG_ACC_MAX_HOR2 
 
 
-
 %%%%%%%%%%%% Determine subsets and associated probabilities %%%%%%%%%%%%%%%
 if nargin<12
  [subsets, pap_subset, p_not_monitored]= determine_subsets_v4(G, p_sat, p_const, P_THRES, FC_THRES);
 end
 %%%%%%%%%%%%% Compute subset position solutions, sigmas, and biases %%%%%%%
-
+% 计算每个子集的位置解、方差（sigmas）和偏差（biases）
 [sigma, sigma_ss, bias, bias_ss, s1vec, s2vec, s3vec, x, chi2] = compute_subset_solutions(...
              G, sigpr2_int, sigpr2_acc, nom_bias_int, nom_bias_acc, subsets, zeros(size(G,1),1));
          
 %%%%%%%%%%%%% Adjust all-in-view position coefficients %%%%%%%%%%%%%%%%%%%%
 if opt_flag
 nsets=size(subsets,1);
-
-
 % s10 = s1vec(1,:) ;  %vec(1,:)+t1*(s1vec(idx_weak1,:)-s1vec(1,:));
 % s20 = s2vec(1,:) ;  %vec(1,:)+t2*(s2vec(idx_weak2,:)-s2vec(1,:));
 % s30 = s3vec(1,:) ;
@@ -72,25 +77,23 @@ s1vec(1,:) = s1opt;  %vec(1,:)+t1*(s1vec(idx_weak1,:)-s1vec(1,:));
 s2vec(1,:) = s2opt;  %vec(1,:)+t2*(s2vec(idx_weak2,:)-s2vec(1,:));
 s3vec(1,:) = s3opt;  %s3vec(1,:)+t3*(s3vec(idx_weak3,:)-s3vec(1,:));
 
-sigma(1,1) = sqrt((s1vec(1,:).^2)* sigpr2_int);
-sigma(1,2) = sqrt((s2vec(1,:).^2)* sigpr2_int);
-sigma(1,3) = sqrt((s3vec(1,:).^2)* sigpr2_int);
+sigma(1,1) = sqrt((s1vec(1,:).^2)* sigpr2_int); % 计算垂直方向的方差
+sigma(1,2) = sqrt((s2vec(1,:).^2)* sigpr2_int); % 计算水平方向1的方差
+sigma(1,3) = sqrt((s3vec(1,:).^2)* sigpr2_int); % 计算水平方向2的方差
 
-bias(1,1)   = abs(s1vec(1,:))*nom_bias_int;
-bias(1,2)   = abs(s2vec(1,:))*nom_bias_int;
-bias(1,3)   = abs(s3vec(1,:))*nom_bias_int;
+bias(1,1)   = abs(s1vec(1,:))*nom_bias_int;  % 计算垂直方向的偏差
+bias(1,2)   = abs(s2vec(1,:))*nom_bias_int;  % 计算水平方向1的偏差
+delta_s1vec = s1vec - ones(nsets,1)*s1vec(1,:);  % 计算偏差
+delta_s2vec = s2vec - ones(nsets,1)*s2vec(1,:);  % 计算偏差
+delta_s3vec = s3vec - ones(nsets,1)*s3vec(1,:);  % 计算偏差
 
-delta_s1vec = s1vec - ones(nsets,1)*s1vec(1,:);
-delta_s2vec = s2vec - ones(nsets,1)*s2vec(1,:);
-delta_s3vec = s3vec - ones(nsets,1)*s3vec(1,:);
+sigma_ss(:,1) = sqrt((delta_s1vec.^2)* sigpr2_acc);  % 计算精度方向的方差
+sigma_ss(:,2) = sqrt((delta_s2vec.^2)* sigpr2_acc);  % 计算精度方向1的方差
+sigma_ss(:,3) = sqrt((delta_s3vec.^2)* sigpr2_acc);  % 计算精度方向2的方差
 
-sigma_ss(:,1) = sqrt((delta_s1vec.^2)* sigpr2_acc);
-sigma_ss(:,2) = sqrt((delta_s2vec.^2)* sigpr2_acc);
-sigma_ss(:,3) = sqrt((delta_s3vec.^2)* sigpr2_acc);
-
-bias_ss(:,1)   = abs(delta_s1vec)*nom_bias_acc;
-bias_ss(:,2)   = abs(delta_s2vec)*nom_bias_acc;
-bias_ss(:,3)   = abs(delta_s3vec)*nom_bias_acc;
+bias_ss(:,1)   = abs(delta_s1vec)*nom_bias_acc;  % 计算精度方向的偏差
+bias_ss(:,2)   = abs(delta_s2vec)*nom_bias_acc;  % 计算精度方向1的偏差
+bias_ss(:,3)   = abs(delta_s3vec)*nom_bias_acc;  % 计算精度方向2的偏差
 end        
 %%%%%%%%%%%%% Filter out modes that cannot be monitored and adjust%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%% integrity budget %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -105,9 +108,6 @@ end
  else
      added_p_not_mon = p_not_monitored_2 - p_not_monitored;
  end
- 
- 
- 
  %Nsubsets = size(subsets,1);
 
 %%%%%%%%%%%%%%%%%%%%%%% Compute test thresholds %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -126,7 +126,6 @@ phmi_hor = rho_j*(PHMI_HOR/2 -.5*PHMI_HOR/(PHMI_VERT+PHMI_HOR)*p_not_monitored)-
 [hpl1, alloc1] = compute_protection_level_v4(sigma(:,1), bias(:,1) + T1, p_fault,  phmi_hor, PL_TOL);
 [hpl2, alloc2] = compute_protection_level_v4(sigma(:,2), bias(:,2) + T2, p_fault,  phmi_hor, PL_TOL);
 hpl = sqrt(hpl1^2 + hpl2^2);
-
 %Exclude modes that are double counted
 
 idx = find((alloc3+alloc2+alloc1)>=1);
@@ -139,7 +138,7 @@ idx = setdiff(1:length(p_fault),idx);
 % s2vec = s2vec(idx,:);
 s3vec = s3vec(idx,:);
 sigma = sigma(idx,:);
-sigma_ss = sigma_ss(idx,:);      
+sigma_ss = sigma_ss(idx,:);
 bias = bias(idx,:);
 bias_ss = bias_ss(idx,:);
 subsets = subsets(idx,:);
@@ -166,17 +165,14 @@ hpl = sqrt(hpl1^2 + hpl2^2);
 
 
 end
-
-
 %%%%%%%%%%%%%%%%%%% Compute Effective Monitor threshold %%%%%%%%%%%%%%%%%%%
 % idx = find(pap_subset>=P_EMT);
-sigma3_acc = sqrt((s3vec.*s3vec)*sigpr2_acc);
+sigma3_acc = sqrt((s3vec.*s3vec)*sigpr2_acc);  % 计算精度方向的有效监控阈值
 % K_md_emt   = - norminv(.5*P_EMT./pap_subset);
 %emt = max(T3(idx) + K_md_emt(idx).*sigma3_acc(idx));
 emt = compute_emt(s3vec, sigpr2_acc, T3, pap_subset, P_EMT);
 
 %%%%%%%%%%%%%%%%%%%% Compute sigma accuracy %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-sig_acc = sigma3_acc(1);
+sig_acc = sigma3_acc(1);  % 计算精度方向的标准差
 %End
-
